@@ -1,0 +1,90 @@
+---
+title: "Unionid Morphological Classification"
+author: "Irene Sanchez Gonzalez"
+date: "2023-09-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r morphology}
+library(tidyverse)
+library(reshape2)
+library(readr)
+library(ggplot2)
+library(NbClust)
+library(dendextend)
+library(cowplot)
+library(Hmisc)
+library(corrplot)
+#Import dataset
+database<- read_csv("C:/Workspace/classification/030823.csv")
+#Perform Hierarchical Cluster--------------------------------------------------------
+df1 <- na.omit(database [,-(4)])
+#Substract ID column
+df1_species<- df1$Species
+df1$Species<- NULL  
+str(df1)
+#Convert qualitative variables to numbers
+#df1$Sculpturing <- as.numeric(as.factor(df1$Sculpturing))
+#df1$Outline <- as.numeric(as.factor(df1$Outline))
+#R scale fucntion, standarize
+df_sc <- as.data.frame(na.omit(scale(df1)))
+# The dist() function creates a dissimilarity matrix of our dataset and should 
+#be the first argument to the hclust() function. 
+# In the method argument, you can specify the method to use for clustering.
+
+hierarchical.clustering <- hclust(dist(df_sc), method = "ward.D") 
+
+#Plot
+plot(hierarchical.clustering)
+#Know how many clusters (Duda-Hart test)
+duda <- NbClust(df_sc, distance = "euclidean", method = "ward.D", max.nc = 9, index = "duda")
+duda
+pseudot2 <- NbClust(df_sc, distance = "euclidean", method = "ward.D", max.nc = 9, index = "pseudot2")
+pseudot2$All.index
+#We will have 5 Clusters based on Duda pseudot test
+#Once we have established the clusters with proceed with non-hiearchical clustering
+# there is an element of randomness in cluster analysis
+# this means that you will not always get the same output every time you do a cluster analysis
+# if you do want to always get the same output, you need to fix R's random number generator with the  set.seed command
+set.seed(12)
+stats::kmeans(df_sc, centers = 4, nstart = 10)
+init <- sample(4, nrow(df_sc), replace = TRUE)
+plot(df_sc, col = init)
+kmeans.clustering <- kmeans(df_sc, 5, nstart = 25)
+kmeans.clustering
+df2<- df1%>% 
+  mutate(km.group = factor(kmeans.clustering$cluster, labels=c("cl1","cl2","cl3", "cl4", "cl5")))
+# Factorize the cluster indicator from the kmeans.clustering data frame and add it to the equipment data frame.
+#Inspect the clusters
+a <- df2%>% 
+  group_by(km.group) %>% # group by cluster (km.group)
+  summarise(count = n(), 
+              Mass= mean(Mass_L),
+            Size = mean(Length),
+            Thickness = mean(Width_L),
+            Outline = mean (`Outline STE`),
+            Sculpturing = mean(Sculpturing), 
+  ) # Then ask for the number of respondents and for the means of the ratings.
+a
+#Visualize clusters
+hierarchical.clustering$labels <- df1_species
+
+```
+
+
+
+```{r pressure, echo=TRUE}
+plot(hierarchical.clustering)
+rect.hclust(hierarchical.clustering , k = 6, border = 2:6)
+```
+
